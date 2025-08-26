@@ -1,6 +1,7 @@
 import { FileMetadata } from '@lobechat/types';
 import { and, count, desc, eq, ilike } from 'drizzle-orm';
 import { sha256 } from 'js-sha256';
+import { nanoid } from 'nanoid';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -10,10 +11,8 @@ import { S3 } from '@/server/modules/S3';
 import { DocumentService } from '@/server/services/document';
 import { FileService as CoreFileService } from '@/server/services/file';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
-import { nanoid } from '@/utils/uuid';
 
 import { BaseService } from '../common/base.service';
-import { addFileUrlPrefix } from '../helpers/file';
 import {
   BatchFileUploadRequest,
   BatchFileUploadResponse,
@@ -171,7 +170,9 @@ export class FileUploadService extends BaseService {
       const totalCount = totalResult[0]?.count || 0;
 
       // 转换为响应格式
-      const responseFiles = filesResult.map((file) => this.convertToUploadResponse(file));
+      const responseFiles = await Promise.all(
+        filesResult.map((file) => this.convertToUploadResponse(file)),
+      );
 
       this.log('info', 'File list retrieved successfully', {
         count: filesResult.length,
@@ -220,7 +221,7 @@ export class FileUploadService extends BaseService {
         throw this.createCommonError('File not found');
       }
 
-      const baseResponse = this.convertToUploadResponse(file);
+      const baseResponse = await this.convertToUploadResponse(file);
 
       return {
         ...baseResponse,
@@ -255,8 +256,11 @@ export class FileUploadService extends BaseService {
       // 设置过期时间（默认1小时）
       const expiresIn = options.expiresIn || 3600;
 
-      // 使用S3服务生成预签名URL
-      const signedUrl = await this.s3Service.createPreSignedUrlForPreview(file.url, expiresIn);
+      // 使用核心文件服务生成预签名URL（传入相对路径）
+      const signedUrl = await this.coreFileService.createPreSignedUrlForPreview(
+        file.url,
+        expiresIn,
+      );
 
       // 计算过期时间戳
       const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
@@ -336,6 +340,9 @@ export class FileUploadService extends BaseService {
               });
             }
 
+            // 生成返回的完整URL
+            const publicUrl = await this.ensureFullUrl(existingUserFile.url);
+
             return {
               fileType: existingUserFile.fileType,
               filename: existingUserFile.name,
@@ -344,7 +351,7 @@ export class FileUploadService extends BaseService {
               metadata: existingUserFile.metadata as FileMetadata,
               size: existingUserFile.size,
               uploadedAt: existingUserFile.createdAt.toISOString(),
-              url: existingUserFile.url,
+              url: publicUrl,
             };
           } else {
             // 文件在全局表中存在，但用户没有记录，创建用户文件记录
@@ -385,6 +392,9 @@ export class FileUploadService extends BaseService {
               url: existingFileCheck.url,
             });
 
+            // 生成返回的完整URL
+            const publicUrl = await this.ensureFullUrl(existingFileCheck.url!);
+
             return {
               fileType: file.type,
               filename: file.name,
@@ -393,7 +403,7 @@ export class FileUploadService extends BaseService {
               metadata: existingFileCheck.metadata as FileMetadata,
               size: file.size,
               uploadedAt: new Date().toISOString(),
-              url: existingFileCheck.url!,
+              url: publicUrl,
             };
           }
         }
@@ -406,10 +416,7 @@ export class FileUploadService extends BaseService {
       const fileBuffer = Buffer.from(fileArrayBuffer);
       await this.s3Service.uploadBuffer(metadata.path, fileBuffer, file.type);
 
-      // 6. 生成访问URL
-      const publicUrl = await this.coreFileService.getFullFileUrl(metadata.path);
-
-      // 7. 保存文件记录到数据库
+      // 6. 保存文件记录到数据库（存储相对路径）
       const fileRecord = {
         chunkTaskId: null,
         clientId: null,
@@ -420,7 +427,7 @@ export class FileUploadService extends BaseService {
         metadata: metadata,
         name: file.name,
         size: file.size,
-        url: publicUrl,
+        url: metadata.path, // 存储相对路径而不是完整URL
       };
 
       const createResult = await this.fileModel.create(fileRecord, true);
@@ -433,6 +440,9 @@ export class FileUploadService extends BaseService {
           sessionId: options.sessionId,
         });
       }
+
+      // 7. 生成返回的完整URL
+      const publicUrl = await this.ensureFullUrl(metadata.path);
 
       this.log('info', 'Public file uploaded successfully', {
         fileId: createResult.id,
@@ -600,7 +610,7 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError('Access denied');
       }
 
-      // 删除S3文件
+      // 删除S3文件（传入相对路径）
       await this.coreFileService.deleteFile(file.url);
 
       // 删除数据库记录
@@ -722,9 +732,25 @@ export class FileUploadService extends BaseService {
   }
 
   /**
+   * 确保获取完整URL，避免重复拼接
+   * 检查URL是否已经是完整URL，如果不是则生成完整URL
+   */
+  private async ensureFullUrl(url: string): Promise<string> {
+    // 检查URL是否已经是完整URL（向后兼容历史数据）
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      return url; // 已经是完整URL，直接返回
+    } else {
+      // 相对路径，生成完整URL
+      return await this.coreFileService.getFullFileUrl(url);
+    }
+  }
+
+  /**
    * 转换为上传响应格式
    */
-  private convertToUploadResponse(file: FileItem): FileUploadResponse {
+  private async convertToUploadResponse(file: FileItem): Promise<FileUploadResponse> {
+    const fullUrl = await this.ensureFullUrl(file.url);
+
     return {
       fileType: file.fileType,
       filename: file.name,
@@ -733,7 +759,7 @@ export class FileUploadService extends BaseService {
       metadata: file.metadata as FileMetadata,
       size: file.size,
       uploadedAt: file.createdAt.toISOString(),
-      url: addFileUrlPrefix({ path: file.url, url: file.url }).url || file.url,
+      url: fullUrl || file.url,
     };
   }
 
