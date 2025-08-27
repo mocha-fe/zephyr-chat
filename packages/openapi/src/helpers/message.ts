@@ -5,8 +5,8 @@ export function transformMessageToResponse(message: any): MessageResponse {
   return {
     ...message,
     files: addFilesUrlPrefix(
-      message.messagesFiles?.map((messageFile: { file: any }) => messageFile.file) || [],
+      message.filesToMessages?.map((messageFile: { file: any }) => messageFile.file) || [],
     ),
-    messagesFiles: undefined,
+    filesToMessages: undefined,
   };
 }

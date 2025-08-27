@@ -15,7 +15,6 @@ import {
   knowledgeBaseFiles,
 } from '../schemas';
 import { LobeChatDatabase, Transaction } from '../type';
-import { generateSecureFileHash, inferAccessType } from '../utils/secureFileHash';
 
 export class FileModel {
   private readonly userId: string;
@@ -84,30 +83,6 @@ export class FileModel {
       size: item.size,
       url: item.url,
     };
-  };
-
-  /**
-   * 生成安全的文件哈希，考虑访问权限
-   * @param originalHash 原始文件内容哈希
-   * @param url 文件URL
-   * @param metadata 文件元数据
-   * @returns 安全的复合哈希
-   */
-  generateSecureHash = (originalHash: string, url: string, metadata?: any): string => {
-    const accessType = inferAccessType(url, metadata);
-    return generateSecureFileHash(originalHash, accessType, this.userId);
-  };
-
-  /**
-   * 检查安全哈希，支持访问权限隔离
-   * @param originalHash 原始文件内容哈希
-   * @param url 文件URL
-   * @param metadata 文件元数据
-   * @returns 检查结果
-   */
-  checkSecureHash = async (originalHash: string, url: string, metadata?: any) => {
-    const secureHash = this.generateSecureHash(originalHash, url, metadata);
-    return this.checkHash(secureHash);
   };
 
   delete = async (id: string, removeGlobalFile: boolean = true, trx?: Transaction) => {

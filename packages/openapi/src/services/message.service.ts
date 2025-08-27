@@ -113,7 +113,7 @@ export class MessageService extends BaseService {
             : undefined,
         ),
         with: {
-          messagesFiles: {
+          filesToMessages: {
             with: {
               file: true,
             },
@@ -125,7 +125,7 @@ export class MessageService extends BaseService {
         },
       });
 
-      // 将 messagesFiles 转换为 files 字段
+      // 将 filesToMessages 转换为 files 字段
       const messageListWithFiles = messageList.map(transformMessageToResponse);
 
       this.log('info', '获取话题消息列表完成', { count: messageListWithFiles.length });
@@ -164,7 +164,7 @@ export class MessageService extends BaseService {
             : undefined,
         ),
         with: {
-          messagesFiles: {
+          filesToMessages: {
             with: {
               file: true,
             },
@@ -262,7 +262,7 @@ export class MessageService extends BaseService {
             : undefined,
         ),
         with: {
-          messagesFiles: {
+          filesToMessages: {
             with: {
               file: true,
             },
@@ -539,7 +539,7 @@ export class MessageService extends BaseService {
             : undefined,
         ),
         with: {
-          messagesFiles: {
+          filesToMessages: {
             with: {
               file: true,
             },

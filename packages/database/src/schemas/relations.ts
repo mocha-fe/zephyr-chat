@@ -83,7 +83,7 @@ export const threadsRelations = relations(threads, ({ one }) => ({
 }));
 
 export const messagesRelations = relations(messages, ({ many, one }) => ({
-  messagesFiles: many(messagesFiles),
+  filesToMessages: many(messagesFiles),
 
   session: one(sessions, {
     fields: [messages.sessionId],
