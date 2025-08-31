@@ -81,12 +81,12 @@ export class FileUploadService extends BaseService {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         results.failed.push({
           error: errorMessage,
-          filename: file.name,
+          name: file.name,
         });
         results.summary.failed++;
         this.log('warn', 'File upload failed in batch', {
           error: errorMessage,
-          filename: file.name,
+          name: file.name,
         });
       }
     }
@@ -268,14 +268,14 @@ export class FileUploadService extends BaseService {
       this.log('info', 'File URL generated successfully', {
         expiresIn,
         fileId,
-        filename: file.name,
+        name: file.name,
       });
 
       return {
         expiresAt,
         expiresIn,
         fileId,
-        filename: file.name,
+        name: file.name,
         url: signedUrl,
       };
     } catch (error) {
@@ -298,7 +298,7 @@ export class FileUploadService extends BaseService {
 
       this.log('info', 'Starting public file upload', {
         directory: options.directory,
-        filename: file.name,
+        name: file.name,
         size: file.size,
         type: file.type,
       });
@@ -317,8 +317,8 @@ export class FileUploadService extends BaseService {
         if (existingFileCheck.isExist) {
           this.log('info', 'Public file already exists, checking user file record', {
             existingUrl: existingFileCheck.url,
-            filename: file.name,
             hash,
+            name: file.name,
           });
 
           // 检查当前用户是否已经有这个文件的记录
@@ -328,7 +328,7 @@ export class FileUploadService extends BaseService {
             // 用户已有此文件记录，直接返回
             this.log('info', 'User already has this public file record', {
               fileId: existingUserFile.id,
-              filename: existingUserFile.name,
+              name: existingUserFile.name,
             });
 
             // 如果提供了 sessionId，创建文件和会话的关联关系
@@ -345,10 +345,10 @@ export class FileUploadService extends BaseService {
 
             return {
               fileType: existingUserFile.fileType,
-              filename: existingUserFile.name,
               hash,
               id: existingUserFile.id,
               metadata: existingUserFile.metadata as FileMetadata,
+              name: existingUserFile.name,
               size: existingUserFile.size,
               uploadedAt: existingUserFile.createdAt.toISOString(),
               url: publicUrl,
@@ -356,8 +356,8 @@ export class FileUploadService extends BaseService {
           } else {
             // 文件在全局表中存在，但用户没有记录，创建用户文件记录
             this.log('info', 'Public file exists globally, creating user file record', {
-              filename: file.name,
               hash,
+              name: file.name,
             });
 
             const fileRecord = {
@@ -397,10 +397,10 @@ export class FileUploadService extends BaseService {
 
             return {
               fileType: file.type,
-              filename: file.name,
               hash,
               id: createResult.id,
               metadata: existingFileCheck.metadata as FileMetadata,
+              name: file.name,
               size: file.size,
               uploadedAt: new Date().toISOString(),
               url: publicUrl,
@@ -454,10 +454,10 @@ export class FileUploadService extends BaseService {
 
       return {
         fileType: file.type,
-        filename: file.name,
         hash,
         id: createResult.id,
         metadata,
+        name: file.name,
         size: file.size,
         uploadedAt: new Date().toISOString(),
         url: publicUrl,
@@ -513,13 +513,13 @@ export class FileUploadService extends BaseService {
             content: existingDocument.content as string,
             fileId,
             fileType: file.fileType,
-            filename: file.name,
             metadata: {
               pages: existingDocument.pages?.length || 0,
               title: existingDocument.title || undefined,
               totalCharCount: existingDocument.totalCharCount || undefined,
               totalLineCount: existingDocument.totalLineCount || undefined,
             },
+            name: file.name,
             parseStatus: 'completed',
             parsedAt: existingDocument.createdAt.toISOString(),
           };
@@ -529,7 +529,7 @@ export class FileUploadService extends BaseService {
       this.log('info', 'Starting file parsing', {
         fileId,
         fileType: file.fileType,
-        filename: file.name,
+        name: file.name,
         skipExist: options.skipExist,
       });
 
@@ -549,13 +549,13 @@ export class FileUploadService extends BaseService {
           content: document.content || '',
           fileId,
           fileType: file.fileType,
-          filename: file.name,
           metadata: {
             pages: document.pages?.length || 0,
             title: document.title || undefined,
             totalCharCount: document.totalCharCount || undefined,
             totalLineCount: document.totalLineCount || undefined,
           },
+          name: file.name,
           parseStatus: 'completed',
           parsedAt: new Date().toISOString(),
         };
@@ -566,7 +566,7 @@ export class FileUploadService extends BaseService {
         this.log('error', 'File parsing failed', {
           error: errorMessage,
           fileId,
-          filename: file.name,
+          name: file.name,
         });
 
         // 返回失败结果
@@ -575,7 +575,7 @@ export class FileUploadService extends BaseService {
           error: errorMessage,
           fileId,
           fileType: file.fileType,
-          filename: file.name,
+          name: file.name,
           parseStatus: 'failed',
           parsedAt: new Date().toISOString(),
         };
@@ -753,10 +753,10 @@ export class FileUploadService extends BaseService {
 
     return {
       fileType: file.fileType,
-      filename: file.name,
       hash: file.fileHash || '',
       id: file.id,
       metadata: file.metadata as FileMetadata,
+      name: file.name,
       size: file.size,
       uploadedAt: file.createdAt.toISOString(),
       url: fullUrl || file.url,
@@ -788,7 +788,7 @@ export class FileUploadService extends BaseService {
 
       this.log('info', 'File retrieval and parsing completed successfully', {
         fileId,
-        filename: uploadResult.filename,
+        name: uploadResult.name,
         parseStatus: parseResult.parseStatus,
       });
 
@@ -816,7 +816,7 @@ export class FileUploadService extends BaseService {
       }
 
       this.log('info', 'Starting file upload and parsing', {
-        filename: file.name,
+        name: file.name,
         size: file.size,
         skipExist: parseOptions.skipExist,
         type: file.type,
@@ -830,7 +830,7 @@ export class FileUploadService extends BaseService {
 
       this.log('info', 'File upload and parsing completed successfully', {
         fileId: uploadResult.id,
-        filename: uploadResult.filename,
+        name: uploadResult.name,
         parseStatus: parseResult.parseStatus,
       });
 

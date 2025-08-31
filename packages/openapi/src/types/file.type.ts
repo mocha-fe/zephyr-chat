@@ -27,14 +27,14 @@ export interface FileUploadRequest {
 export interface FileUploadResponse {
   /** 文件MIME类型 */
   fileType: string;
-  /** 文件名 */
-  filename: string;
   /** 文件哈希值 */
   hash: string;
   /** 文件ID */
   id?: string;
   /** 文件元数据 */
   metadata: FileMetadata;
+  /** 文件名 */
+  name: string;
   /** 文件大小（字节） */
   size: number;
   /** 上传时间 */
@@ -50,7 +50,7 @@ export interface PreSignedUrlRequest {
   /** 文件MIME类型 */
   fileType: string;
   /** 文件名 */
-  filename: string;
+  name: string;
   /** 自定义路径（可选） */
   pathname?: string;
   /** 文件大小（字节） */
@@ -144,7 +144,7 @@ export interface FileUrlResponse {
   /** 文件ID */
   fileId: string;
   /** 文件名 */
-  filename: string;
+  name: string;
   /** 预签名访问URL */
   url: string;
 }
@@ -171,14 +171,14 @@ export interface PublicFileUploadRequest {
 export interface PublicFileUploadResponse {
   /** 文件MIME类型 */
   fileType: string;
-  /** 文件名 */
-  filename: string;
   /** 文件哈希值 */
   hash: string;
   /** 文件ID */
   id: string;
   /** 文件元数据 */
   metadata: FileMetadata;
+  /** 文件名 */
+  name: string;
   /** 文件大小（字节） */
   size: number;
   /** 上传时间 */
@@ -194,7 +194,7 @@ export interface PermanentFileUrlResponse {
   /** 文件ID */
   fileId: string;
   /** 文件名 */
-  filename: string;
+  name: string;
   /** 永久访问URL */
   url: string;
   /** URL类型 */
@@ -224,7 +224,7 @@ export interface BatchFileUploadResponse {
   /** 失败的文件及错误信息 */
   failed: Array<{
     error: string;
-    filename: string;
+    name: string;
   }>;
   /** 成功上传的文件 */
   successful: FileUploadResponse[];
@@ -240,10 +240,10 @@ export interface BatchFileUploadResponse {
  * 文件上传进度回调类型
  */
 export interface FileUploadProgress {
-  /** 文件名 */
-  filename: string;
   /** 已上传字节数 */
   loaded: number;
+  /** 文件名 */
+  name: string;
   /** 上传百分比 */
   percentage: number;
   /** 上传状态 */
@@ -274,8 +274,6 @@ export interface FileParseResponse {
   fileId: string;
   /** 文件类型 */
   fileType: string;
-  /** 文件名 */
-  filename: string;
   /** 文档元数据 */
   metadata?: {
     /** 页数 */
@@ -287,6 +285,8 @@ export interface FileParseResponse {
     /** 行总数 */
     totalLineCount?: number;
   };
+  /** 文件名 */
+  name: string;
   /** 解析状态 */
   parseStatus: 'completed' | 'failed';
   /** 解析时间 */
@@ -306,7 +306,7 @@ export interface FileUploadAndParseResponse {
 // Zod Schemas for validation
 export const PreSignedUrlRequestSchema = z.object({
   fileType: z.string().min(1, '文件类型不能为空'),
-  filename: z.string().min(1, '文件名不能为空'),
+  name: z.string().min(1, '文件名不能为空'),
   pathname: z.string().nullish(),
   size: z.number().positive('文件大小必须大于0'),
 });
