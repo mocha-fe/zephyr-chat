@@ -3,7 +3,7 @@
 import { MessageItem } from '@lobechat/types';
 import { z } from 'zod';
 
-import { SessionItem, TopicItem, UserItem } from '@/database/schemas';
+import { FileItem, SessionItem, TopicItem, UserItem } from '@/database/schemas';
 
 // Request schemas
 export const MessagesQueryByTopicRequestSchema = z.object({
@@ -91,11 +91,17 @@ export interface MessagesCreateRequest {
   favorite?: boolean;
 }
 
-// 消息查询时的返回类型，包含关联的 session 和 user 信息
-export interface MessageResponse extends MessageItem {
+// 从数据库联表查询出来的消息类型，包含关联的 session 和 user 信息
+export interface MessageResponseFromDatabase extends Omit<MessageItem, 'files'> {
   session: SessionItem | null;
   user: UserItem;
   topic: TopicItem | null;
+  filesToMessages: { file: FileItem; messageId: string }[] | null;
+}
+
+// 消息查询时的返回类型，包含关联的 session 和 user 信息
+export interface MessageResponse extends Omit<MessageResponseFromDatabase, 'filesToMessages'> {
+  files: FileItem[] | null;
 }
 
 // Additional schemas for message routes

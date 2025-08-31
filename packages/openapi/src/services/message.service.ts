@@ -3,12 +3,13 @@ import { and, count, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 import { messages, messagesFiles, topics } from '@/database/schemas';
 import { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
+import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
-import { transformMessageToResponse } from '../helpers/message';
 import { ServiceResult } from '../types';
 import {
   MessageResponse,
+  MessageResponseFromDatabase,
   MessagesCreateRequest,
   SearchMessagesByKeywordRequest,
 } from '../types/message.type';
@@ -26,8 +27,41 @@ export interface MessageCountResult {
  * 提供各种消息数量统计功能
  */
 export class MessageService extends BaseService {
+  private coreFileService: CoreFileService;
+
   constructor(db: LobeChatDatabase, userId: string | null) {
     super(db, userId);
+
+    this.coreFileService = new CoreFileService(db, userId!);
+  }
+
+  /**
+   * 对消息内容进行格式化，目前主要是对文件列表进行格式化
+   * @param fileId 文件ID
+   * @returns
+   */
+  private async formatMessages(
+    messages: MessageResponseFromDatabase[],
+  ): Promise<MessageResponse[]> {
+    return await Promise.all(
+      messages.map(async (message) => {
+        return {
+          ...message,
+          files: await Promise.all(
+            message.filesToMessages?.map(async ({ file }) => {
+              if (file.url.startsWith('http')) {
+                return file;
+              }
+
+              return {
+                ...file,
+                url: await this.coreFileService.getFullFileUrl(file.url),
+              };
+            }) ?? [],
+          ),
+        };
+      }),
+    );
   }
 
   /**
@@ -103,7 +137,7 @@ export class MessageService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此话题的消息');
       }
 
-      const messageList = await this.db.query.messages.findMany({
+      const messageList = (await this.db.query.messages.findMany({
         orderBy: desc(messages.createdAt),
         where: and(
           eq(messages.topicId, topicId),
@@ -123,10 +157,10 @@ export class MessageService extends BaseService {
           translation: true,
           user: true,
         },
-      });
+      })) as MessageResponseFromDatabase[];
 
       // 将 filesToMessages 转换为 files 字段
-      const messageListWithFiles = messageList.map(transformMessageToResponse);
+      const messageListWithFiles = await this.formatMessages(messageList);
 
       this.log('info', '获取话题消息列表完成', { count: messageListWithFiles.length });
 
@@ -155,7 +189,7 @@ export class MessageService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权访问此消息');
       }
 
-      const message = await this.db.query.messages.findFirst({
+      const message = (await this.db.query.messages.findFirst({
         where: and(
           eq(messages.id, messageId),
           // 添加权限相关的查询条件
@@ -174,7 +208,7 @@ export class MessageService extends BaseService {
           translation: true,
           user: true,
         },
-      });
+      })) as MessageResponseFromDatabase;
 
       if (!message) {
         this.log('info', '消息不存在或无权限访问', { messageId });
@@ -182,7 +216,10 @@ export class MessageService extends BaseService {
       }
 
       this.log('info', '获取消息详情完成', { messageId });
-      return transformMessageToResponse(message);
+
+      const formattedMessage = await this.formatMessages([message]);
+
+      return formattedMessage[0];
     } catch (error) {
       this.log('error', '获取消息详情失败', { error });
       throw this.createCommonError('查询消息详情失败');
@@ -252,7 +289,7 @@ export class MessageService extends BaseService {
       }
 
       // 重新查询包含 session 和 user 信息的完整消息
-      const completeMessage = await this.db.query.messages.findFirst({
+      const completeMessage = (await this.db.query.messages.findFirst({
         where: and(
           eq(messages.id, newMessage.id),
           // 添加权限相关的查询条件
@@ -271,7 +308,7 @@ export class MessageService extends BaseService {
           topic: true,
           user: true,
         },
-      });
+      })) as MessageResponseFromDatabase;
 
       if (!completeMessage) {
         throw new Error('无法查询到刚创建的消息');
@@ -279,7 +316,9 @@ export class MessageService extends BaseService {
 
       this.log('info', '创建消息完成', { messageId: newMessage.id });
 
-      return transformMessageToResponse(completeMessage);
+      const formattedMessage = await this.formatMessages([completeMessage]);
+
+      return formattedMessage[0];
     } catch (error) {
       this.log('error', '创建消息失败', { error });
       throw this.createCommonError('创建消息失败');
@@ -526,7 +565,7 @@ export class MessageService extends BaseService {
       }
 
       // 步骤4: 使用 with 关联查询获取完整的消息信息
-      const result = await this.db.query.messages.findMany({
+      const result = (await this.db.query.messages.findMany({
         limit: limit,
         offset: offset,
         orderBy: desc(messages.createdAt),
@@ -548,14 +587,14 @@ export class MessageService extends BaseService {
           topic: true,
           user: true,
         },
-      });
+      })) as MessageResponseFromDatabase[];
 
       this.log('info', '关键词搜索消息完成', {
         keyword,
         resultCount: result.length,
       });
 
-      return result.map(transformMessageToResponse);
+      return await this.formatMessages(result);
     } catch (error) {
       this.log('error', '关键词搜索消息失败', { error, keyword: searchRequest.keyword });
       throw this.createCommonError('搜索消息失败');
