@@ -56,9 +56,22 @@ export const config = {
 
 const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc'];
 
+// Define allowed paths that don't require redirect to port 80
+const allowedPaths = ['/login', '/logout', '/next-auth', '/oidc', '/trpc', '/api', '/oauth'];
+
 const defaultMiddleware = (request: NextRequest) => {
   const url = new URL(request.url);
   logDefault('Processing request: %s %s', request.method, request.url);
+
+  // Check if the request should be redirected to port 80
+  const shouldRedirect = !allowedPaths.some((path) => url.pathname.startsWith(path));
+
+  if (shouldRedirect) {
+    const redirectUrl = new URL(url);
+    redirectUrl.port = '80';
+    logDefault('Redirecting to port 80: %s -> %s', url.href, redirectUrl.href);
+    return NextResponse.redirect(redirectUrl);
+  }
 
   // skip all api requests
   if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {

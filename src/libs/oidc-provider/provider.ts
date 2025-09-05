@@ -127,7 +127,51 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
         },
       },
       revocation: { enabled: true },
-      rpInitiatedLogout: { enabled: true },
+      // 自动确认 RP 发起的登出，避免出现二次确认页面
+      rpInitiatedLogout: {
+        enabled: true,
+        // 使用内置的 form（指向 /oidc/session/end/confirm）并自动提交
+        logoutSource(ctx, form) {
+          ctx.type = 'html';
+          ctx.body = `<!DOCTYPE html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <title>Signing out…</title>
+                <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 24px; color: #222; }
+                  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+                </style>
+              </head>
+              <body>
+                <div class="sr-only">Signing out…</div>
+                ${form}
+                <script>
+                  try { document.forms && document.forms[0] && document.forms[0].submit(); } catch (e) { /* no-op */ }
+                </script>
+                <noscript>
+                  <p>Signing out… If this page does not redirect, click the button above.</p>
+                </noscript>
+              </body>
+            </html>`;
+        },
+        // 无 post_logout_redirect_uri 时的成功页（保持简单，自动关闭/返回可按需增强）
+        postLogoutSuccessSource(ctx) {
+          ctx.type = 'html';
+          ctx.body = `<!DOCTYPE html>
+            <html lang="en">
+              <head>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <title>Signed out</title>
+              </head>
+              <body>
+                <p>Signed out.</p>
+              </body>
+            </html>`;
+        },
+      },
       userinfo: { enabled: true },
     },
     // 10. 账户查找
