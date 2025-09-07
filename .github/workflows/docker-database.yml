@@ -1,4 +1,4 @@
-name: Publish Zephyr Chat Docker Image
+name: Build Docker Image
 
 on:
   workflow_dispatch:
