@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REGISTRY_IMAGE: ghcr.io/mocha-fe/lobe-chat
+  REGISTRY_IMAGE: ghcr.io/mocha-fe/zephyr-chat
   NEXT_PUBLIC_ENABLE_NEXT_AUTH: '1'
   NEXT_AUTH_SSO_PROVIDERS: 'casdoor'
   NEXT_PUBLIC_SERVICE_MODE: 'server'
