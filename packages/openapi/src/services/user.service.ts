@@ -546,19 +546,15 @@ export class UserService extends BaseService {
         // 3. 验证所有角色存在且激活
         if (allRoleIds.size > 0) {
           const existingRoles = await tx.query.roles.findMany({
-            where: and(inArray(roles.id, Array.from(allRoleIds)), eq(roles.isActive, true)),
+            where: inArray(roles.id, Array.from(allRoleIds)),
           });
 
           const existingRoleIds = new Set(existingRoles.map((r) => r.id));
           const missingRoleIds = Array.from(allRoleIds).filter((id) => !existingRoleIds.has(id));
 
           if (missingRoleIds.length > 0) {
-            throw this.createBusinessError(`以下角色不存在或未激活: ${missingRoleIds.join(', ')}`);
+            throw this.createBusinessError(`以下角色不存在: ${missingRoleIds.join(', ')}`);
           }
-
-          // 4. 权限检查：验证操作者是否有权限分配这些角色
-          // 这里可以添加更复杂的权限检查逻辑
-          // 例如：不允许分配比操作者权限更高的角色
         }
 
         // 5. 获取用户当前的角色关联
