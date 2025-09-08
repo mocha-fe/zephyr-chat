@@ -39,10 +39,6 @@ export class AgentService extends BaseService {
     this.log('info', '获取用户的 Agent 列表', { userId: this.userId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_READ', 'ALL');
 
@@ -85,10 +81,6 @@ export class AgentService extends BaseService {
     this.log('info', '创建智能体', { title: request.title });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_CREATE', this.userId);
 
@@ -135,10 +127,6 @@ export class AgentService extends BaseService {
     this.log('info', '更新智能体', { id: request.id, title: request.title });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_UPDATE', {
         targetAgentId: request.id,
@@ -175,7 +163,7 @@ export class AgentService extends BaseService {
         const [updatedAgent] = await tx
           .update(agents)
           .set(updateData)
-          .where(and(eq(agents.id, request.id), eq(agents.userId, this.userId!)))
+          .where(and(eq(agents.id, request.id)))
           .returning();
 
         this.log('info', 'Agent 更新成功', { id: updatedAgent.id, slug: updatedAgent.slug });
@@ -194,10 +182,6 @@ export class AgentService extends BaseService {
     this.log('info', '删除智能体', { agentId: request.agentId, migrateTo: request.migrateTo });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_DELETE', {
         targetAgentId: request.agentId,
@@ -253,10 +237,6 @@ export class AgentService extends BaseService {
     this.log('info', '根据 ID 获取 Agent 详情', { agentId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_READ', {
         targetAgentId: agentId,
@@ -290,10 +270,6 @@ export class AgentService extends BaseService {
     this.log('info', '根据 Session ID 获取 Agent 详情', { sessionId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_READ', {
         targetSessionId: sessionId,
@@ -382,10 +358,6 @@ export class AgentService extends BaseService {
     this.log('info', '为 Agent 创建 Session', { agentId: request.agentId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_UPDATE', {
         targetAgentId: request.agentId,
@@ -454,10 +426,6 @@ export class AgentService extends BaseService {
     this.log('info', '获取 Agent 关联的 Session', { agentId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_READ', {
         targetAgentId: agentId,
@@ -520,10 +488,6 @@ export class AgentService extends BaseService {
     this.log('info', '关联 Agent 和 Session', { agentId, sessionId: request.sessionId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_UPDATE', {
         targetAgentId: agentId,
@@ -585,10 +549,6 @@ export class AgentService extends BaseService {
     this.log('info', '取消 Agent 和 Session 关联', { agentId, sessionId });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_UPDATE', {
         targetAgentId: agentId,
@@ -642,10 +602,6 @@ export class AgentService extends BaseService {
     });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveQueryPermission('AGENT_UPDATE', {
         targetAgentId: agentId,
@@ -727,10 +683,6 @@ export class AgentService extends BaseService {
     });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveBatchQueryPermission('AGENT_DELETE', {
         targetAgentId: request.agentIds,
@@ -820,10 +772,6 @@ export class AgentService extends BaseService {
     this.log('info', '批量更新 Agent', { agentCount: request.agentIds.length });
 
     try {
-      if (!this.userId) {
-        throw this.createAuthError('用户未认证');
-      }
-
       // 权限校验
       const permissionResult = await this.resolveBatchQueryPermission('AGENT_UPDATE', {
         targetAgentId: request.agentIds,

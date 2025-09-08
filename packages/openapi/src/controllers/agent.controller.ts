@@ -64,11 +64,12 @@ export class AgentController extends BaseController {
    */
   async updateAgent(c: Context): Promise<Response> {
     try {
+      const { id } = this.getParams<{ id: string }>(c);
       const body = await this.getBody<UpdateAgentRequest>(c);
 
       const db = await this.getDatabase();
       const agentService = new AgentService(db, this.getUserId(c));
-      const updatedAgent = await agentService.updateAgent(body);
+      const updatedAgent = await agentService.updateAgent({ ...body, id });
 
       return this.success(c, updatedAgent, 'Agent 更新成功');
     } catch (error) {
