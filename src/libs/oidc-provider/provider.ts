@@ -315,13 +315,27 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     ttl: {
       AccessToken: 25 * 3600, // 25 hour
       AuthorizationCode: 600, // 10 minutes
-      DeviceCode: 600, // 10 minutes (if enabled)
+      DeviceCode: 600, 
 
-      IdToken: 3600, // 1 hour
-      Interaction: 3600, // 1 hour
+      // 30 days
+// Define Grant artifacts TTL to avoid NOTICE and control persistence lifetime
+Grant: 30 * 24 * 60 * 60, 
+      
 
-      RefreshToken: 30 * 24 * 60 * 60, // 30 days
-      Session: 30 * 24 * 60 * 60, // 30 days
+// 10 minutes (if enabled)
+IdToken: 3600, 
+
+      
+
+// 1 hour
+Interaction: 3600, 
+      
+
+// 1 hour
+RefreshToken: 30 * 24 * 60 * 60, 
+      
+      // 30 days
+Session: 30 * 24 * 60 * 60, // 30 days
     },
   };
 

@@ -41,6 +41,17 @@ export class OIDCService {
       // 如果之前的交互步骤已经关联了 Grant
       grant = await this.provider.Grant.find(existingGrantId);
       log('Found existing grantId: %s', existingGrantId);
+
+      // 如果找到的 Grant 归属的账户与当前账户不一致，则丢弃旧的 Grant，创建新的
+      // 解决切换账号后继续授权导致的 "accountId mismatch" 问题
+      if (grant && (grant as any).accountId && (grant as any).accountId !== accountId) {
+        log(
+          'Existing grant accountId mismatch (grant.accountId=%s, current=%s), ignore and recreate',
+          (grant as any).accountId,
+          accountId,
+        );
+        grant = undefined;
+      }
     }
 
     if (!grant) {

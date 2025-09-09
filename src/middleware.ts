@@ -24,6 +24,48 @@ const logClerk = debug('middleware:clerk');
 
 // OIDC session pre-sync constant
 const OIDC_SESSION_HEADER = 'x-oidc-session-sync';
+// Track last seen account to detect account switching
+const OIDC_ACCOUNT_TRACK_COOKIE = 'x-oidc-account';
+
+// Helper: clear OIDC interaction-related cookies to avoid reusing stale interaction context
+const clearOidcInteractionCookies = (request: NextRequest, response: NextResponse) => {
+  const candidates = request.cookies.getAll();
+
+  // Known oidc-provider cookies and patterns
+  const namesToClear = new Set<string>(['_interaction', '_interaction_resume', '_state']);
+
+  const clearName = (cookieName: string) => {
+    // Clear for both root and provider sub-paths
+    response.cookies.set(cookieName, '', { maxAge: 0, path: '/' });
+    response.cookies.set(cookieName, '', { maxAge: 0, path: '/oidc' });
+  };
+
+  for (const c of candidates) {
+    const name = c.name;
+    // exact match of known names or any _interaction_* variant
+    if (namesToClear.has(name) || name.startsWith('_interaction')) {
+      clearName(name);
+    }
+
+    // Clear signatures if present
+    if (
+      name === '_interaction.sig' ||
+      name === '_interaction_resume.sig' ||
+      name === '_state.sig'
+    ) {
+      clearName(name);
+    }
+  }
+
+  // Also proactively clear the exact known signature cookies in case not present in request
+  clearName('_interaction.sig');
+  clearName('_interaction_resume.sig');
+  clearName('_state.sig');
+
+  // Proactively clear provider session cookie scoped under /oidc only (avoid touching app/global sessions)
+  response.cookies.set('session', '', { maxAge: 0, path: '/oidc' });
+  response.cookies.set('session.sig', '', { maxAge: 0, path: '/oidc' });
+};
 
 export const config = {
   matcher: [
@@ -214,8 +256,22 @@ const nextAuthMiddleware = NextAuthEdge.auth(async (req) => {
 
     // If OIDC is enabled and user is logged in, add OIDC session pre-sync header
     if (oidcEnv.ENABLE_OIDC && session?.user?.id) {
-      logNextAuth('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, session.user.id);
-      response.headers.set(OIDC_SESSION_HEADER, session.user.id);
+      const currentAccountId = session.user.id;
+      logNextAuth('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, currentAccountId);
+      response.headers.set(OIDC_SESSION_HEADER, currentAccountId);
+
+      // Detect account switch: compare last tracked account cookie
+      const lastAccountId = req.cookies.get(OIDC_ACCOUNT_TRACK_COOKIE)?.value;
+      if (lastAccountId && lastAccountId !== currentAccountId) {
+        logNextAuth(
+          'Detected account change from %s to %s, clearing OIDC interaction cookies',
+          lastAccountId,
+          currentAccountId,
+        );
+        clearOidcInteractionCookies(req, response);
+      }
+      // Update tracker cookie
+      response.cookies.set(OIDC_ACCOUNT_TRACK_COOKIE, currentAccountId, { path: '/' });
     }
   } else {
     // If request a protected route, redirect to sign-in page
@@ -227,6 +283,17 @@ const nextAuthMiddleware = NextAuthEdge.auth(async (req) => {
       return Response.redirect(nextLoginUrl);
     }
     logNextAuth('Request a free route but not login, allow visit without auth header');
+
+    // If previously had an account but now logged out, clear OIDC interaction cookies
+    if (oidcEnv.ENABLE_OIDC) {
+      const lastAccountId = req.cookies.get(OIDC_ACCOUNT_TRACK_COOKIE)?.value;
+      if (lastAccountId) {
+        logNextAuth('Detected logout for %s, clearing OIDC interaction cookies', lastAccountId);
+        clearOidcInteractionCookies(req, response);
+        // Remove tracker cookie
+        response.cookies.set(OIDC_ACCOUNT_TRACK_COOKIE, '', { maxAge: 0, path: '/' });
+      }
+    }
   }
 
   return response;
@@ -256,10 +323,31 @@ const clerkAuthMiddleware = clerkMiddleware(
 
     // If OIDC is enabled and Clerk user is logged in, add OIDC session pre-sync header
     if (oidcEnv.ENABLE_OIDC && data.userId) {
-      logClerk('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, data.userId);
-      response.headers.set(OIDC_SESSION_HEADER, data.userId);
+      const currentAccountId = data.userId;
+      logClerk('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, currentAccountId);
+      response.headers.set(OIDC_SESSION_HEADER, currentAccountId);
+
+      // Detect account switch
+      const lastAccountId = req.cookies.get(OIDC_ACCOUNT_TRACK_COOKIE)?.value;
+      if (lastAccountId && lastAccountId !== currentAccountId) {
+        logClerk(
+          'Detected account change from %s to %s, clearing OIDC interaction cookies',
+          lastAccountId,
+          currentAccountId,
+        );
+        clearOidcInteractionCookies(req, response);
+      }
+      // Update tracker cookie
+      response.cookies.set(OIDC_ACCOUNT_TRACK_COOKIE, currentAccountId, { path: '/' });
     } else if (oidcEnv.ENABLE_OIDC) {
       logClerk('No Clerk user detected, not setting OIDC session sync header');
+      // If previously had an account but now logged out, clear interaction cookies
+      const lastAccountId = req.cookies.get(OIDC_ACCOUNT_TRACK_COOKIE)?.value;
+      if (lastAccountId) {
+        logClerk('Detected logout for %s, clearing OIDC interaction cookies', lastAccountId);
+        clearOidcInteractionCookies(req, response);
+        response.cookies.set(OIDC_ACCOUNT_TRACK_COOKIE, '', { maxAge: 0, path: '/' });
+      }
     }
 
     return response;

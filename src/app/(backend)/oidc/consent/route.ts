@@ -46,26 +46,43 @@ export async function POST(request: NextRequest) {
 
     const { prompt } = details;
     let result;
+    let internalRedirectUrlString: string | undefined;
     if (consent === 'accept') {
-      log(`User accepted the request, Handling 'login' prompt`);
+      log(`User accepted the request.`);
       const { userId } = await getUserAuth();
       log('Obtained userId: %s', userId);
 
+      if (!userId) {
+        log('No userId found in auth context, abort consent with 401');
+        return NextResponse.json(
+          {
+            error: 'not_authenticated',
+            error_description: 'User is not authenticated',
+          },
+          { status: 401 },
+        );
+      }
+
       if (details.prompt.name === 'login') {
-        result = {
-          login: { accountId: userId, remember: true },
-        };
+        log(`Handling 'login' prompt`);
+        result = { login: { accountId: userId, remember: true } };
+        log('Interaction Result (login): %O', result);
+        internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
       } else {
         log(`Handling 'consent' prompt`);
 
         // 1. 获取必要的 ID
         const clientId = details.params.client_id as string;
+        log('Consent flow context: %o', {
+          clientId,
+          detailsGrantId: details.grantId,
+          promptName: details.prompt?.name,
+        });
 
         // 2. 查找或创建 Grant 对象
         const grant = await oidcService.findOrCreateGrants(userId!, clientId, details.grantId);
 
         // 3. 将用户同意的 scopes 和 claims 添加到 Grant 对象
-        //    这些信息通常在 details.prompt.details 中
         const missingOIDCScope = (prompt.details.missingOIDCScope as string[]) || [];
         if (missingOIDCScope) {
           grant.addOIDCScope(missingOIDCScope.join(' '));
@@ -85,19 +102,34 @@ export async function POST(request: NextRequest) {
             log('Added resource scopes for %s to grant: %s', indicator, scopes.join(' '));
           }
         }
-        // 如果使用了 RAR (Rich Authorization Requests)，也需要添加到 grant
-        // if (prompt.details.rar) {
-        //   prompt.details.rar.forEach(detail => grant.addRar(detail));
-        // }
 
         // 4. 保存 Grant 对象以获取其 jti (grantId)
         const newGrantId = await grant.save();
         log('Saved grant with ID: %s', newGrantId);
 
-        // 5. 准备包含 grantId 的 result
-        result = { consent: { grantId: newGrantId } };
+        // 5. 检测 provider session 的 accountId 与当前用户是否一致
+        const providerSessionAccountId = (details as any)?.session?.accountId as string | undefined;
+        log('Provider session accountId: %s; Current userId: %s', providerSessionAccountId, userId);
+        if (providerSessionAccountId && providerSessionAccountId !== userId) {
+          log(
+            "Provider session's accountId (%s) != current userId (%s). Finishing with login+consent to resync.",
+            providerSessionAccountId,
+            userId,
+          );
 
-        log('Consent result prepared with grantId');
+          result = {
+            consent: { grantId: newGrantId },
+            login: { accountId: userId, remember: true },
+          };
+          log('Interaction Result (login+consent): %O', result);
+          // Use interactionResult to obtain redirect URL string
+          internalRedirectUrlString = await oidcService.getInteractionResult(uid, result as any);
+        } else {
+          // 正常 consent 提交流程
+          result = { consent: { grantId: newGrantId } };
+          log('Interaction Result (consent): %O', result);
+          internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
+        }
       }
       log('User %s the authorization', consent);
     } else {
@@ -106,21 +138,41 @@ export async function POST(request: NextRequest) {
         error: 'access_denied',
         error_description: 'User denied the authorization request',
       };
+      log('Interaction Result (rejected): %O', result);
+      internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
       log('User %s the authorization', consent);
     }
 
-    log('Interaction Result: %O', result);
-
-    const internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
     log('OIDC Provider internal redirect URL string: %s', internalRedirectUrlString);
+
+    if (!internalRedirectUrlString) {
+      log('ERROR: internalRedirectUrlString is empty or undefined, cannot continue');
+      return NextResponse.json(
+        {
+          error: 'server_error',
+          error_description: 'Internal redirect URL is missing',
+        },
+        { status: 500 },
+      );
+    }
 
     let finalRedirectUrl;
     try {
-      finalRedirectUrl = correctOIDCUrl(request, new URL(internalRedirectUrlString));
-    } catch {
-      finalRedirectUrl = new URL(internalRedirectUrlString);
-      log('Warning: Could not parse redirect URL, using as-is: %s', internalRedirectUrlString);
+      // If provider returned a relative path, construct with request origin
+      const redirectUrl = new URL(internalRedirectUrlString, request.nextUrl.origin);
+      finalRedirectUrl = correctOIDCUrl(request, redirectUrl);
+    } catch (e) {
+      log('Error parsing redirect URL: %O', e);
+      return NextResponse.json(
+        {
+          error: 'server_error',
+          error_description: 'Invalid redirect URL from provider',
+        },
+        { status: 500 },
+      );
     }
+
+    log('Final redirect URL: %s', finalRedirectUrl.toString());
 
     return NextResponse.redirect(finalRedirectUrl, {
       headers: request.headers,
